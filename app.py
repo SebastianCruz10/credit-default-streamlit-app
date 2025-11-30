@@ -32,7 +32,7 @@ st.markdown(
 
 # ===================== PARÁMETROS GLOBALES =====================
 
-TARGET_COL = "default_payment_next_month" 
+TARGET_COL = "default.payment.next.month" 
 
 THRESHOLD = 0.298  
 
@@ -41,20 +41,12 @@ THRESHOLD = 0.298
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
-    """
-    Carga el dataset procesado desde un CSV.
-    Debe incluir la columna objetivo TARGET_COL.
-    """
     df = pd.read_csv("data_processed.csv")
     return df
 
 
 @st.cache_resource
 def train_model(df: pd.DataFrame):
-    """
-    Entrena el modelo final (GradientBoosting) usando los mejores hiperparámetros
-    que definiste en el notebook. Esto se cachea para no reentrenar en cada recarga.
-    """
     if TARGET_COL not in df.columns:
         raise ValueError(f"La columna objetivo '{TARGET_COL}' no está en el dataset.")
 
@@ -372,6 +364,7 @@ with tabs[3]:
           manteniendo un nivel razonable de aprobación para buenos clientes.
         """
     )
+
 
 
 
