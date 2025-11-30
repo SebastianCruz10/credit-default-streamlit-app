@@ -16,7 +16,6 @@ from sklearn.metrics import (
     classification_report
 )
 
-
 # ===================== CONFIGURACIÓN BÁSICA =====================
 
 st.set_page_config(
@@ -29,24 +28,49 @@ st.markdown(
     "Aplicación en Streamlit basada en el dataset **Default of Credit Card Clients**."
 )
 
-
 # ===================== PARÁMETROS GLOBALES =====================
 
-TARGET_COL = "default.payment.next.month" 
+# Nombre de la columna objetivo en tu CSV trabajado
+TARGET_COL = "default.payment.next.month"
 
-THRESHOLD = 0.298  
+# Umbral óptimo que obtuviste en el notebook
+THRESHOLD = 0.298
 
+# ===================== ESTADO DE SESIÓN =====================
 
-# ===================== CARGA DE DATOS =====================
+if "df" not in st.session_state:
+    st.session_state.df = None
 
-@st.cache_data
-def load_data() -> pd.DataFrame:
-    df = pd.read_csv("data_processed.csv")
-    return df
+if "model" not in st.session_state:
+    st.session_state.model = None
 
+if "feature_names" not in st.session_state:
+    st.session_state.feature_names = None
 
-@st.cache_resource
+if "metrics" not in st.session_state:
+    st.session_state.metrics = None
+
+if "y_pred" not in st.session_state:
+    st.session_state.y_pred = None
+
+if "proba" not in st.session_state:
+    st.session_state.proba = None
+
+if "y_true" not in st.session_state:
+    st.session_state.y_true = None
+
+# ===================== FUNCIONES AUXILIARES =====================
+
+def load_default_data():
+    """Carga un dataset por defecto si existe data_processed.csv."""
+    try:
+        df = pd.read_csv("data_processed.csv")
+        return df
+    except FileNotFoundError:
+        return None
+
 def train_model(df: pd.DataFrame):
+    """Entrena el modelo GradientBoosting con hiperparámetros óptimos."""
     if TARGET_COL not in df.columns:
         raise ValueError(f"La columna objetivo '{TARGET_COL}' no está en el dataset.")
 
@@ -59,18 +83,13 @@ def train_model(df: pd.DataFrame):
         n_estimators=200,
         random_state=42
     )
-
     model.fit(X, y)
 
     feature_names = list(X.columns)
-
     return model, feature_names
 
-
 def compute_metrics(y_true, y_proba, threshold: float):
-  
-    # Calcula métricas de evaluación dado un vector de probabilidades y un umbral
-
+    """Calcula métricas de evaluación dado un vector de probabilidades y un umbral."""
     y_pred = (y_proba >= threshold).astype(int)
     metrics = {
         "accuracy": accuracy_score(y_true, y_pred),
@@ -81,11 +100,8 @@ def compute_metrics(y_true, y_proba, threshold: float):
     }
     return metrics, y_pred
 
-
 def plot_confusion_matrix(y_true, y_pred, title="Matriz de confusión"):
-   
-   #  Grafica la matriz de confusión como heatmap.
-   
+    """Grafica la matriz de confusión como heatmap."""
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.heatmap(
@@ -102,268 +118,228 @@ def plot_confusion_matrix(y_true, y_pred, title="Matriz de confusión"):
     ax.set_title(title)
     st.pyplot(fig)
 
-
-# ===================== INICIALIZACIÓN =====================
-
-df = load_data()
-
-if TARGET_COL not in df.columns:
-    st.error(
-        f"El dataset 'data_processed.csv' no contiene la columna objetivo '{TARGET_COL}'. "
-        f"Ajústala en la constante TARGET_COL en app.py."
-    )
-    st.stop()
-
-try:
-    model, feature_names = train_model(df)
-except Exception as e:
-    st.error(f"Error al entrenar el modelo en la nube: {e}")
-    st.stop()
-
-X_all = df[feature_names]
-y_all = df[TARGET_COL]
-
-
 # ===================== PESTAÑAS PRINCIPALES =====================
 
 tabs = st.tabs([
-    "1) Datos (.csv)",
-    "2) Entrenamiento del modelo",
-    "3) Predicciones y métricas",
-    "4) Análisis de resultados"
+    "1) Cargar datos",
+    "2) Entrenar modelo",
+    "3) Hacer predicciones",
+    "4) Ver resultados"
 ])
 
-
 # --------------------------------------------------------
-# TAB 1: PRESENTACIÓN E INTERPRETACIÓN DE LOS DATOS
+# TAB 1: CARGAR DATOS Y VER CLASES
 # --------------------------------------------------------
 with tabs[0]:
-    st.header("1) Presentación e interpretación de los datos (.csv)")
-
-    st.subheader("Vista general del dataset")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.write(f"Número de filas: **{df.shape[0]}**")
-        st.write(f"Número de columnas: **{df.shape[1]}**")
-
-    with col2:
-        st.write("Columnas del dataset:")
-        st.write(list(df.columns))
-
-    st.subheader("Primeras filas del dataset")
-    st.dataframe(df.head())
-
-    st.subheader("Descripción estadística de variables numéricas")
-    st.dataframe(df.describe())
-
-    st.subheader("Distribución de la variable objetivo")
-    target_counts = df[TARGET_COL].value_counts().sort_index()
-    st.bar_chart(target_counts)
+    st.header("1) Cargar datos (.csv) e interpretar clases")
 
     st.markdown(
         """
-        - **0**: Cliente que no cayó en default (buen pagador).  
-        - **1**: Cliente que cayó en default (mal pagador).  
-
-        Esta distribución evidencia el **desbalance de clases**, donde la mayoría
-        de clientes no entra en default.
+        Sube tu archivo `.csv` ya trabajado (con la columna objetivo `default.payment.next.month`)
+        o, si no subes nada, se intentará cargar `data_processed.csv` por defecto.
         """
     )
 
+    uploaded_file = st.file_uploader("Sube tu archivo CSV procesado", type=["csv"])
 
-# --------------------------------------------------------
-# TAB 2: ENTRENAMIENTO DEL MODELO
-# --------------------------------------------------------
-with tabs[1]:
-    st.header("2) Entrenamiento del modelo")
-
-    st.markdown(
-        """
-        En esta sección se describe brevemente cómo se entrenó el modelo:
-
-        1. **Preparación de datos**  
-           - Se partió del dataset de clientes de tarjeta de crédito.  
-           - Se seleccionaron las variables relevantes y se definió la variable objetivo
-             (`{TARGET_COL}`).  
-
-        2. **Manejo del desbalance de clases**  
-           - Se evaluaron diferentes técnicas de *sampling* como SMOTE, RandomUnderSampler, etc.  
-           - Para el modelo de **Gradient Boosting**, la mejor configuración se obtuvo
-             sin aplicar sampling adicional (tratando los datos originales tal cual).  
-
-        3. **Comparación de modelos**  
-           - Se compararon modelos como Regresión Logística, Random Forest, XGBoost
-             y Gradient Boosting, utilizando **GridSearchCV** con validación cruzada.  
-           - La métrica objetivo fue **ROC-AUC**, debido al desbalance entre clases.  
-           - El modelo ganador fue **GradientBoostingClassifier** con hiperparámetros
-             ajustados.
-
-        4. **Ajuste del umbral de decisión**  
-           - A partir de las probabilidades de salida del modelo, se analizó la curva
-             precision–recall.  
-           - Se seleccionó un umbral óptimo que maximiza el **F1-score** para la clase
-             de clientes que entran en default.
-        """
-    )
-
-    st.subheader("Hiperparámetros del modelo en esta app")
-    st.code(
-        "GradientBoostingClassifier(\n"
-        "    learning_rate=0.05,\n"
-        "    max_depth=3,\n"
-        "    n_estimators=200,\n"
-        "    random_state=42\n"
-        ")",
-        language="python"
-    )
-
-    st.info(f"Umbral de decisión utilizado actualmente: **{THRESHOLD:.3f}**")
-
-    st.markdown(
-        """
-        > Nota: El GridSearch completo se ejecutó previamente en un notebook.
-        > En esta app se utiliza el modelo ya definido con los mejores hiperparámetros
-        > encontrados, y se entrena de nuevo directamente a partir del dataset cargado.
-        """
-    )
-
-
-# --------------------------------------------------------
-# TAB 3: PREDICCIONES Y MÉTRICAS
-# --------------------------------------------------------
-with tabs[2]:
-    st.header("3) Hacer las predicciones de riesgo (Métricas)")
-
-    st.markdown(
-        """
-        En esta pestaña puedes evaluar el modelo:
-        - Usando el dataset base (`data_processed.csv`), o  
-        - Subiendo un archivo `.csv` con la **misma estructura** (incluyendo la columna objetivo).
-        """
-    )
-
-    option = st.radio(
-        "Selecciona la fuente de datos para evaluar:",
-        ["Usar data_processed.csv", "Subir un archivo CSV propio"]
-    )
-
-    df_eval = None
-
-    if option == "Usar data_processed.csv":
-        df_eval = df.copy()
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df = df
+        st.success("✅ CSV cargado correctamente desde el archivo subido.")
     else:
-        uploaded_file = st.file_uploader("Sube un archivo CSV", type=["csv"])
-        if uploaded_file is not None:
-            df_eval = pd.read_csv(uploaded_file)
-            st.write("Vista previa de los datos cargados:")
-            st.dataframe(df_eval.head())
-        else:
-            st.info("Sube un archivo CSV para continuar.")
+        # Si no hay nada en sesión, intentamos cargar el CSV por defecto
+        if st.session_state.df is None:
+            df_default = load_default_data()
+            if df_default is not None:
+                st.session_state.df = df_default
+                st.info("Se ha cargado automáticamente `data_processed.csv` del repositorio.")
+            else:
+                st.warning("No se ha subido ningún CSV y no se encontró `data_processed.csv`.")
 
-    if df_eval is not None:
-        if TARGET_COL not in df_eval.columns:
-            st.error(
-                f"El archivo no contiene la columna objetivo '{TARGET_COL}'. "
-                "No se pueden calcular métricas sin la variable real."
+    df = st.session_state.df
+
+    if df is not None:
+        st.subheader("Vista general del dataset")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.write(f"Número de filas: **{df.shape[0]}**")
+            st.write(f"Número de columnas: **{df.shape[1]}**")
+
+        with col2:
+            st.write("Columnas del dataset:")
+            st.write(list(df.columns))
+
+        st.subheader("Primeras filas del dataset")
+        st.dataframe(df.head())
+
+        if TARGET_COL in df.columns:
+            st.subheader("Distribución de la variable objetivo")
+            target_counts = df[TARGET_COL].value_counts().sort_index()
+            st.bar_chart(target_counts)
+
+            st.markdown(
+                """
+                - **0**: Cliente que no cayó en default (buen pagador).  
+                - **1**: Cliente que cayó en default (mal pagador).  
+
+                Esta distribución evidencia el **desbalance de clases**, donde la mayoría
+                de clientes no entra en default.
+                """
             )
         else:
-            missing_features = [c for c in feature_names if c not in df_eval.columns]
-            if missing_features:
-                st.error(
-                    "El archivo no tiene exactamente las mismas columnas de características "
-                    "que el modelo espera. Faltan: " + ", ".join(missing_features)
-                )
-            else:
-                X_eval = df_eval[feature_names]
-                y_eval = df_eval[TARGET_COL]
-
-                proba_eval = model.predict_proba(X_eval)[:, 1]
-                metrics_eval, y_pred_eval = compute_metrics(y_eval, proba_eval, THRESHOLD)
-
-                st.subheader("Métricas de evaluación")
-                st.dataframe(
-                    pd.Series(metrics_eval).to_frame("valor").style.format("{:.4f}")
-                )
-
-                st.markdown(
-                    """
-                    - **accuracy**: proporción de predicciones correctas.  
-                    - **precision**: de los clientes que el modelo marcó como "default",
-                      cuántos realmente lo fueron.  
-                    - **recall**: de todos los clientes que entraron en default,
-                      cuántos detectó el modelo.  
-                    - **f1**: balance entre precision y recall.  
-                    - **roc_auc**: capacidad del modelo para discriminar entre buenos
-                      y malos pagadores.
-                    """
-                )
-
-                st.subheader("Matriz de confusión")
-                plot_confusion_matrix(y_eval, y_pred_eval, title="Matriz de confusión (datos de evaluación)")
-
-                st.subheader("Distribución de probabilidades de default")
-                fig, ax = plt.subplots(figsize=(6, 4))
-                ax.hist(proba_eval, bins=30)
-                ax.axvline(THRESHOLD, color="red", linestyle="--", label=f"Umbral = {THRESHOLD:.3f}")
-                ax.set_xlabel("Probabilidad predicha de default")
-                ax.set_ylabel("Frecuencia")
-                ax.legend()
-                st.pyplot(fig)
-
+            st.error(
+                f"El dataset no contiene la columna objetivo '{TARGET_COL}'. "
+                "Asegúrate de que el CSV trabajado tenga esa columna."
+            )
 
 # --------------------------------------------------------
-# TAB 4: ANÁLISIS DE LOS RESULTADOS
+# TAB 2: ENTRENAR MODELO (BAJO DEMANDA)
+# --------------------------------------------------------
+with tabs[1]:
+    st.header("2) Entrenar modelo (Gradient Boosting)")
+
+    df = st.session_state.df
+
+    if df is None:
+        st.warning("Primero debes cargar un dataset en la pestaña 'Cargar datos'.")
+    elif TARGET_COL not in df.columns:
+        st.error(
+            f"El dataset cargado no tiene la columna objetivo '{TARGET_COL}'. "
+            "Revisa tu CSV."
+        )
+    else:
+        st.markdown(
+            """
+            Al hacer clic en **'Entrenar modelo'**, se entrenará el modelo
+            **GradientBoostingClassifier** con los hiperparámetros óptimos
+            definidos en el trabajo.
+            """
+        )
+
+        if st.button("Entrenar modelo"):
+            try:
+                model, feature_names = train_model(df)
+                st.session_state.model = model
+                st.session_state.feature_names = feature_names
+                st.success("✅ Modelo entrenado correctamente.")
+
+                # Métricas simples sobre el mismo dataset (solo para info rápida)
+                X_all = df[feature_names]
+                y_all = df[TARGET_COL]
+                proba_all = model.predict_proba(X_all)[:, 1]
+                metrics_all, y_pred_all = compute_metrics(y_all, proba_all, THRESHOLD)
+
+                st.subheader("Resumen rápido de métricas (sobre todo el dataset)")
+                st.dataframe(
+                    pd.Series(metrics_all).to_frame("valor").style.format("{:.4f}")
+                )
+
+            except Exception as e:
+                st.error(f"Error al entrenar el modelo: {e}")
+
+        if st.session_state.model is not None:
+            st.info("Ya hay un modelo entrenado en memoria. Puedes re-entrenar si cargas otro CSV.")
+
+# --------------------------------------------------------
+# TAB 3: HACER PREDICCIONES (BAJO DEMANDA)
+# --------------------------------------------------------
+with tabs[2]:
+    st.header("3) Hacer predicciones con el modelo entrenado")
+
+    df = st.session_state.df
+    model = st.session_state.model
+    feature_names = st.session_state.feature_names
+
+    if df is None:
+        st.warning("Primero debes cargar un dataset en la pestaña 'Cargar datos'.")
+    elif model is None or feature_names is None:
+        st.warning("Primero debes entrenar el modelo en la pestaña 'Entrenar modelo'.")
+    elif TARGET_COL not in df.columns:
+        st.error(
+            f"El dataset cargado no tiene la columna objetivo '{TARGET_COL}'. "
+            "Revisa tu CSV."
+        )
+    else:
+        st.markdown(
+            """
+            Al hacer clic en **'Hacer predicciones'**, se calcularán las probabilidades
+            de default para cada registro del dataset cargado, y se generarán las
+            métricas globales que luego se mostrarán en la pestaña **'Ver resultados'**.
+            """
+        )
+
+        if st.button("Hacer predicciones"):
+            X_all = df[feature_names]
+            y_all = df[TARGET_COL]
+
+            proba_all = model.predict_proba(X_all)[:, 1]
+            metrics_all, y_pred_all = compute_metrics(y_all, proba_all, THRESHOLD)
+
+            st.session_state.metrics = metrics_all
+            st.session_state.y_pred = y_pred_all
+            st.session_state.proba = proba_all
+            st.session_state.y_true = y_all
+
+            st.success("✅ Predicciones realizadas y resultados almacenados. Ve a 'Ver resultados'.")
+
+# --------------------------------------------------------
+# TAB 4: VER RESULTADOS
 # --------------------------------------------------------
 with tabs[3]:
-    st.header("4) Análisis de los resultados")
+    st.header("4) Ver resultados del modelo")
 
-    st.markdown(
-        """
-        Aquí se muestran las métricas y la matriz de confusión calculadas sobre todo
-        el dataset base, junto con un breve análisis cualitativo del modelo.
-        """
-    )
+    metrics_all = st.session_state.metrics
+    y_pred_all = st.session_state.y_pred
+    proba_all = st.session_state.proba
+    y_true_all = st.session_state.y_true
 
-    proba_all = model.predict_proba(X_all)[:, 1]
-    metrics_all, y_pred_all = compute_metrics(y_all, proba_all, THRESHOLD)
+    if metrics_all is None or y_pred_all is None or proba_all is None or y_true_all is None:
+        st.warning(
+            "Primero debes entrenar el modelo (pestaña 2) y luego hacer predicciones "
+            "(pestaña 3) para ver los resultados."
+        )
+    else:
+        st.subheader("Métricas generales")
+        st.dataframe(pd.Series(metrics_all).to_frame("valor").style.format("{:.4f}"))
 
-    st.subheader("Métricas generales sobre el dataset completo")
-    st.dataframe(pd.Series(metrics_all).to_frame("valor").style.format("{:.4f}"))
+        st.subheader("Matriz de confusión")
+        plot_confusion_matrix(y_true_all, y_pred_all, title="Matriz de confusión (dataset completo)")
 
-    st.subheader("Matriz de confusión global")
-    plot_confusion_matrix(y_all, y_pred_all, title="Matriz de confusión (dataset completo)")
+        st.subheader("Distribución de probabilidades de default")
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.hist(proba_all, bins=30)
+        ax.axvline(THRESHOLD, color="red", linestyle="--", label=f"Umbral = {THRESHOLD:.3f}")
+        ax.set_xlabel("Probabilidad predicha de default")
+        ax.set_ylabel("Frecuencia")
+        ax.legend()
+        st.pyplot(fig)
 
-    st.subheader("Reporte de clasificación")
-    report = classification_report(
-        y_all,
-        y_pred_all,
-        target_names=["No default", "Default"],
-        zero_division=0
-    )
-    st.text(report)
+        st.subheader("Reporte de clasificación")
+        report = classification_report(
+            y_true_all,
+            y_pred_all,
+            target_names=["No default", "Default"],
+            zero_division=0
+        )
+        st.text(report)
 
-    st.markdown(
-        """
-        **Interpretación resumida:**
+        st.markdown(
+            """
+            **Interpretación resumida:**
 
-        - El modelo logra un **buen equilibrio** entre la detección de clientes
-          que entran en default y el control de falsos positivos.  
-        - La **recall** de la clase "Default" indica qué proporción de los clientes
-          morosos se detecta a tiempo.  
-        - La **precision** de la clase "Default" muestra qué tan confiable es la
-          señal de riesgo cuando el modelo marca a un cliente como riesgoso.  
-        - El **F1-score** combina ambas métricas en un único indicador, mientras que
-          el **ROC-AUC** refleja la capacidad global de separación entre buenos y
-          malos pagadores.
+            - El modelo logra un **equilibrio** entre detección de clientes en default
+              y control de falsos positivos.  
+            - La **recall** de la clase "Default" indica qué proporción de los clientes
+              morosos se detecta a tiempo.  
+            - La **precision** de la clase "Default" muestra qué tan confiable es la
+              señal de riesgo cuando el modelo marca a un cliente como riesgoso.  
+            - El **F1-score** combina ambas métricas en un único indicador, mientras que
+              el **ROC-AUC** refleja la capacidad global de separación entre buenos y
+              malos pagadores.
+            """
+        )
 
-        En el contexto del banco, este modelo puede utilizarse para:
-        - Apoyar decisiones de aprobación o ampliación de líneas de crédito.  
-        - Priorizar clientes para monitoreo o acciones preventivas.  
-        - Reducir la probabilidad de pérdida esperada por incumplimiento,
-          manteniendo un nivel razonable de aprobación para buenos clientes.
-        """
-    )
 
 
 
