@@ -232,7 +232,7 @@ with tabs[0]:
                 ax.set_title("Distribución de la variable objetivo")
 
                 for i, v in enumerate(dist_df["Conteo"]):
-                    ax.text(i, v + max(dist_df["Conteo"])*0.02, str(v), ha="center")
+                    ax.text(i, v + max(dist_df["Conteo"]) * 0.02, str(v), ha="center")
 
                 st.pyplot(fig)
 
@@ -284,27 +284,26 @@ with tabs[1]:
         )
 
         if st.button("Entrenar modelo"):
-    try:
-        model, X_test, y_test = train_model_with_split(df)
-        st.session_state.model = model
-        st.session_state.X_test = X_test
-        st.session_state.y_test = y_test
+            try:
+                model, X_test, y_test = train_model_with_split(df)
+                st.session_state.model = model
+                st.session_state.X_test = X_test
+                st.session_state.y_test = y_test
 
-        # 🔁 Limpiamos resultados anteriores de predicciones
-        st.session_state.metrics = None
-        st.session_state.y_pred = None
-        st.session_state.proba = None
+                # 🔁 Limpiamos resultados anteriores de predicciones
+                st.session_state.metrics = None
+                st.session_state.y_pred = None
+                st.session_state.proba = None
 
-        st.success("✅ Modelo entrenado y conjunto de prueba almacenado (X_test, y_test).")
+                st.success("✅ Modelo entrenado y conjunto de prueba almacenado (X_test, y_test).")
 
-        st.info(
-            f"Dimensiones de X_test: {X_test.shape}. "
-            f"Cantidad de ejemplos en el test: {len(y_test)}."
-        )
+                st.info(
+                    f"Dimensiones de X_test: {X_test.shape}. "
+                    f"Cantidad de ejemplos en el test: {len(y_test)}."
+                )
 
-    except Exception as e:
-        st.error(f"Error al entrenar el modelo: {e}")
-
+            except Exception as e:
+                st.error(f"Error al entrenar el modelo: {e}")
 
         if st.session_state.model is not None and st.session_state.X_test is not None:
             st.info("Ya hay un modelo entrenado y un conjunto de prueba listo. Puedes re-entrenar si cambias el CSV.")
@@ -342,7 +341,7 @@ with tabs[2]:
             st.session_state.metrics = metrics_test
             st.session_state.y_pred = y_pred_test
             st.session_state.proba = proba_test
-            st.session_state.y_test = y_test  # aseguramos que quede almacenado
+            st.session_state.y_test = y_test  # nos aseguramos que quede almacenado
 
             st.success("✅ Predicciones realizadas sobre el conjunto de prueba. Ve a 'Ver resultados'.")
 
@@ -361,6 +360,12 @@ with tabs[3]:
         st.warning(
             "Primero debes entrenar el modelo (pestaña 2) y luego hacer predicciones "
             "(pestaña 3) para ver los resultados."
+        )
+    elif len(y_test) != len(y_pred_test):
+        st.error(
+            f"Inconsistencia de tamaños entre y_test ({len(y_test)}) y y_pred ({len(y_pred_test)}).\n\n"
+            "Probablemente reentrenaste el modelo. Vuelve a la pestaña 'Hacer predicciones' "
+            "y ejecuta de nuevo el botón."
         )
     else:
         st.subheader("Métricas en el conjunto de prueba (X_test / y_test)")
@@ -395,7 +400,6 @@ with tabs[3]:
             De esa forma, las métricas y la matriz de confusión son directamente comparables.
             """
         )
-
 
 
 
