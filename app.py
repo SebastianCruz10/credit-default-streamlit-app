@@ -142,6 +142,7 @@ with tabs[0]:
 
     uploaded_file = st.file_uploader("Sube tu archivo CSV procesado", type=["csv"])
 
+    # --- Carga del CSV ---
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         st.session_state.df = df
@@ -151,12 +152,13 @@ with tabs[0]:
             df_default = load_default_data()
             if df_default is not None:
                 st.session_state.df = df_default
-                st.info("Se ha cargado automáticamente `data_processed.csv` del repositorio.")
+                st.info("📁 Se ha cargado automáticamente `data_processed.csv` del repositorio.")
             else:
-                st.warning("No se ha subido ningún CSV y no se encontró `data_processed.csv`.")
+                st.warning("⚠️ No se ha subido ningún CSV y no se encontró `data_processed.csv`.")
 
     df = st.session_state.df
 
+    # --- Mostrar dataset si existe ---
     if df is not None:
         st.subheader("Vista general del dataset")
         col1, col2 = st.columns(2)
@@ -172,47 +174,66 @@ with tabs[0]:
         st.subheader("Primeras filas del dataset")
         st.dataframe(df.head())
 
+        # --- Validación del target ---
         if TARGET_COL in df.columns:
             st.subheader("Revisión rápida de la columna objetivo")
             st.write(df[TARGET_COL].head())
 
-            st.subheader("Distribución de la variable objetivo (gráfico)")
-            
-            dist_df = target_counts.reset_index()
-            dist_df.columns = ["Clase", "Conteo"]
-            
-            fig, ax = plt.subplots(figsize=(6, 4))
-            
-            colors = ["#1f77b4", "#ff7f0e"]  # azul para 0, naranja para 1
-            
-            ax.bar(dist_df["Clase"].astype(str), dist_df["Conteo"], color=colors)
-            
-            ax.set_xlabel("Clase")
-            ax.set_ylabel("Cantidad")
-            ax.set_title("Distribución de la variable objetivo")
-            
-            for i, v in enumerate(dist_df["Conteo"]):
-                ax.text(i, v + max(dist_df["Conteo"])*0.02, str(v), ha="center")
-            
-            st.pyplot(fig)
-            
-            st.markdown(
-                """
-                - **Azul (0)**: Cliente que no cayó en default  
-                - **Naranja (1)**: Cliente que sí cayó en default  
-                """
-            )
+            st.subheader("Distribución de la variable objetivo (tabla)")
+            target_counts = df[TARGET_COL].value_counts().sort_index()
+            st.write(target_counts)
+
+            # Valores únicos
+            unique_vals = sorted(df[TARGET_COL].dropna().unique().tolist())
+
+            # --- Validación de que sea binaria ---
+            if set(unique_vals).issubset({0, 1}):
+
+                st.subheader("Distribución de la variable objetivo (gráfico)")
+
+                # Preparar dataframe para el gráfico
+                dist_df = target_counts.reset_index()
+                dist_df.columns = ["Clase", "Conteo"]
+
+                # Gráfico con dos colores
+                fig, ax = plt.subplots(figsize=(6, 4))
+
+                colors = ["#1f77b4", "#ff7f0e"]  # azul, naranja
+
+                ax.bar(dist_df["Clase"].astype(str), dist_df["Conteo"], color=colors)
+
+                ax.set_xlabel("Clase")
+                ax.set_ylabel("Cantidad")
+                ax.set_title("Distribución de la variable objetivo")
+
+                # Etiquetas encima de cada barra
+                for i, v in enumerate(dist_df["Conteo"]):
+                    ax.text(i, v + max(dist_df["Conteo"])*0.02, str(v), ha="center")
+
+                st.pyplot(fig)
+
+                st.markdown(
+                    """
+                    **Interpretación:**
+
+                    - 🟦 **Azul (0)** → Cliente que **NO** cayó en default  
+                    - 🟧 **Naranja (1)** → Cliente que **SÍ** cayó en default  
+
+                    Se observa claramente el **desbalance de clases**: predominan los clientes que no entran en default.
+                    """
+                )
 
             else:
                 st.error(
-                    f"La columna objetivo '{TARGET_COL}' no parece ser binaria 0/1.\n\n"
+                    f"❌ La columna objetivo '{TARGET_COL}' no parece ser binaria 0/1.\n\n"
                     f"Valores únicos detectados: {unique_vals}\n\n"
-                    "Revisa que estés subiendo el CSV correcto (el ya trabajado, con la variable objetivo como 0 y 1)."
+                    "Revisa que estés subiendo el CSV correcto (el ya procesado)."
                 )
+
         else:
             st.error(
-                f"El dataset no contiene la columna objetivo '{TARGET_COL}'. "
-                "Asegúrate de que el CSV trabajado tenga esa columna con ese nombre exacto."
+                f"❌ El dataset no contiene la columna objetivo '{TARGET_COL}'.\n"
+                "Asegúrate de que el CSV procesado tenga esa columna con ese nombre exacto."
             )
 
 # --------------------------------------------------------
@@ -361,6 +382,7 @@ with tabs[3]:
               malos pagadores.
             """
         )
+
 
 
 
