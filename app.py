@@ -147,7 +147,6 @@ with tabs[0]:
         st.session_state.df = df
         st.success("✅ CSV cargado correctamente desde el archivo subido.")
     else:
-        # Si no hay nada en sesión, intentamos cargar el CSV por defecto
         if st.session_state.df is None:
             df_default = load_default_data()
             if df_default is not None:
@@ -174,23 +173,45 @@ with tabs[0]:
         st.dataframe(df.head())
 
         if TARGET_COL in df.columns:
-            st.subheader("Distribución de la variable objetivo")
+            st.subheader("Revisión rápida de la columna objetivo")
+            st.write(df[TARGET_COL].head())
+
+            st.subheader("Distribución de la variable objetivo (tabla)")
             target_counts = df[TARGET_COL].value_counts().sort_index()
-            st.bar_chart(target_counts)
+            st.write(target_counts)
 
-            st.markdown(
-                """
-                - **0**: Cliente que no cayó en default (buen pagador).  
-                - **1**: Cliente que cayó en default (mal pagador).  
+            # Intentamos interpretar como 0/1
+            unique_vals = sorted(df[TARGET_COL].dropna().unique().tolist())
 
-                Esta distribución evidencia el **desbalance de clases**, donde la mayoría
-                de clientes no entra en default.
-                """
-            )
+            if set(unique_vals).issubset({0, 1}):
+                st.subheader("Distribución de la variable objetivo (gráfico)")
+
+                dist_df = target_counts.reset_index()
+                dist_df.columns = ["Clase", "Conteo"]
+                dist_df["Clase"] = dist_df["Clase"].astype(str)
+
+                st.bar_chart(
+                    dist_df.set_index("Clase")["Conteo"]
+                )
+
+                st.markdown(
+                    """
+                    - **0**: Cliente que no cayó en default (buen pagador).  
+                    - **1**: Cliente que cayó en default (mal pagador).  
+
+                    Se observa el **desbalance de clases**: predominan los clientes que no entran en default.
+                    """
+                )
+            else:
+                st.error(
+                    f"La columna objetivo '{TARGET_COL}' no parece ser binaria 0/1.\n\n"
+                    f"Valores únicos detectados: {unique_vals}\n\n"
+                    "Revisa que estés subiendo el CSV correcto (el ya trabajado, con la variable objetivo como 0 y 1)."
+                )
         else:
             st.error(
                 f"El dataset no contiene la columna objetivo '{TARGET_COL}'. "
-                "Asegúrate de que el CSV trabajado tenga esa columna."
+                "Asegúrate de que el CSV trabajado tenga esa columna con ese nombre exacto."
             )
 
 # --------------------------------------------------------
@@ -339,6 +360,7 @@ with tabs[3]:
               malos pagadores.
             """
         )
+
 
 
 
