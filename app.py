@@ -174,10 +174,12 @@ with tabs[0]:
         st.subheader("Primeras filas del dataset")
         st.dataframe(df.head())
 
+        # --- Nueva sección: DESCRIBE ---
+        st.subheader("Resumen estadístico (describe)")
+        st.dataframe(df.describe())
+
         # --- Validación del target ---
         if TARGET_COL in df.columns:
-            st.subheader("Revisión rápida de la columna objetivo")
-            st.write(df[TARGET_COL].head())
 
             st.subheader("Distribución de la variable objetivo (tabla)")
             target_counts = df[TARGET_COL].value_counts().sort_index()
@@ -198,7 +200,7 @@ with tabs[0]:
                 # Gráfico con dos colores
                 fig, ax = plt.subplots(figsize=(6, 4))
 
-                colors = ["#1f77b4", "#ff7f0e"]  # azul, naranja
+                colors = ["#1f77b4", "#ff7f0e"]  # azul para 0, naranja para 1
 
                 ax.bar(dist_df["Clase"].astype(str), dist_df["Conteo"], color=colors)
 
@@ -235,6 +237,7 @@ with tabs[0]:
                 f"❌ El dataset no contiene la columna objetivo '{TARGET_COL}'.\n"
                 "Asegúrate de que el CSV procesado tenga esa columna con ese nombre exacto."
             )
+
 
 # --------------------------------------------------------
 # TAB 2: ENTRENAR MODELO (BAJO DEMANDA)
@@ -382,6 +385,7 @@ with tabs[3]:
               malos pagadores.
             """
         )
+
 
 
 
